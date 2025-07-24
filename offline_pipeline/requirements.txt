@@ -1,0 +1,7 @@
+pandas
+requests
+pymilvus
+sentence-transformers
+tqdm
+psycopg2-binary
+sqlalchemy

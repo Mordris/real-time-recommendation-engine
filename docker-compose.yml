@@ -1,0 +1,143 @@
+networks:
+  nebula-network:
+    driver: bridge
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.0.1
+    container_name: zookeeper
+    networks:
+      - nebula-network
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    container_name: etcd
+    networks:
+      - nebula-network
+    volumes:
+      - etcd_data:/etcd
+    command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  minio:
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    container_name: minio
+    networks:
+      - nebula-network
+    volumes:
+      - minio_data:/data
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  milvus-standalone:
+    image: milvusdb/milvus:v2.3.1
+    container_name: milvus-standalone
+    networks:
+      - nebula-network
+    depends_on:
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "19530:19530" # Milvus
+      - "9091:9091" # Milvus Proxy
+    volumes:
+      - milvus_data:/var/lib/milvus
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.1.2
+    container_name: redpanda
+    networks:
+      - nebula-network
+    command:
+      - redpanda
+      - start
+      - --smp 1
+      - --overprovisioned
+      - --node-id 0
+      - --kafka-addr PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9092
+      - --pandaproxy-addr 0.0.0.0:8082
+      - --advertise-pandaproxy-addr localhost:8082
+    ports:
+      - "9092:9092"
+      - "8082:8082"
+      - "29092:29092"
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    networks:
+      - nebula-network
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:14-alpine
+    container_name: postgres
+    networks:
+      - nebula-network
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_DB=nebula_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  flink-jobmanager:
+    image: apache/flink:1.16.0-scala_2.12-java11
+    container_name: flink-jobmanager
+    networks:
+      - nebula-network
+    ports:
+      - "8081:8081"
+    command: jobmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=flink-jobmanager
+    volumes:
+      - flink_data:/opt/flink/data
+
+  flink-taskmanager:
+    image: apache/flink:1.16.0-scala_2.12-java11
+    container_name: flink-taskmanager
+    networks:
+      - nebula-network
+    depends_on:
+      - flink-jobmanager
+    command: taskmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=flink-jobmanager
+    volumes:
+      - flink_data:/opt/flink/data
+
+volumes:
+  etcd_data:
+  minio_data:
+  milvus_data:
+  postgres_data:
+  flink_data:
