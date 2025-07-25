@@ -1,3 +1,5 @@
+# apis/requirements.txt
+
 fastapi
 uvicorn[standard]
 pymilvus

@@ -1,0 +1,34 @@
+# flink_app/flink-conf.yaml
+# Flink Configuration for Web UI and Cluster
+
+# JobManager Configuration
+jobmanager.rpc.address: flink-jobmanager
+jobmanager.rpc.port: 6123
+jobmanager.memory.process.size: 1024m
+
+# TaskManager Configuration
+taskmanager.numberOfTaskSlots: 2
+taskmanager.memory.process.size: 1024m
+
+# Web UI Configuration
+web.submit.enable: true
+web.cancel.enable: true
+web.port: 8081
+web.address: 0.0.0.0
+
+# Parallelism
+parallelism.default: 1
+
+# State Backend
+state.backend: hashmap
+state.checkpoints.dir: file:///tmp/flink-checkpoints
+
+# Restart Strategy
+restart-strategy: fixed-delay
+restart-strategy.fixed-delay.attempts: 3
+restart-strategy.fixed-delay.delay: 10s
+
+# Metrics
+metrics.reporters: prometheus
+metrics.reporter.prometheus.class: org.apache.flink.metrics.prometheus.PrometheusReporter
+metrics.reporter.prometheus.port: 9249

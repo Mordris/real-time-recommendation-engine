@@ -1,3 +1,5 @@
+# offline_pipeline/requirements.txt
+
 pandas
 requests
 pymilvus

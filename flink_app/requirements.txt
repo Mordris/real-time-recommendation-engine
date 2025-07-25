@@ -1,0 +1,6 @@
+# flink_app/requirements.txt
+
+apache-flink==1.17.2
+pymilvus==2.3.1
+numpy
+marshmallow==3.19.0
