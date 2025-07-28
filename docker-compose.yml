@@ -3,19 +3,24 @@
 # To stop: docker compose down
 
 services:
+  # --- Milvus Dependencies ---
+  # Milvus requires etcd as a metadata store. It holds information about collections, schemas, etc.
   etcd:
     image: quay.io/coreos/etcd:v3.5.14
     container_name: milvus-etcd-1
     networks:
       - nebula-network
     volumes:
+      # Use a named volume to persist etcd data across container restarts.
       - milvus-etcd:/etcd-data
     environment:
+      # Environment variables to configure etcd's behavior.
       ETCD_AUTO_COMPACTION_MODE: revision
       ETCD_AUTO_COMPACTION_RETENTION: "1000"
       ETCD_QUOTA_BACKEND_BYTES: "4294967296"
       ETCD_SNAPSHOT_COUNT: "50000"
     command:
+      # The command to start the etcd server inside the container.
       - /usr/local/bin/etcd
       - --name=etcd1
       - --data-dir=/etcd-data
@@ -25,93 +30,115 @@ services:
       - --initial-cluster=etcd1=http://etcd:2380
       - --initial-cluster-state=new
 
+  # Milvus requires an S3-compatible object store for large data files like index files. MinIO is a lightweight option.
   minio:
     image: minio/minio:latest
     container_name: milvus-minio-1
     networks:
       - nebula-network
     volumes:
+      # Persist MinIO data.
       - milvus-minio:/data
     environment:
+      # Credentials for MinIO. Milvus will use these to connect.
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     command: server /data
     healthcheck:
+      # A healthcheck ensures that the 'milvus-standalone' service waits until MinIO is fully ready.
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
       timeout: 20s
       retries: 3
 
+  # --- Milvus Vector Database ---
+  # The core vector database service, running in 'standalone' mode for simplicity.
   milvus-standalone:
     image: milvusdb/milvus:v2.4.4
     container_name: milvus-standalone-1
-    command: ["milvus", "run", "standalone"]
+    command: ["milvus", "run", "standalone"] # Explicit command to start Milvus in standalone mode.
     networks:
       - nebula-network
     ports:
+      # Expose the main gRPC port (19530) for the Python SDK and the RESTful API port (9091).
       - "19530:19530"
       - "9091:9091"
     volumes:
+      # Persist the Milvus database files.
       - milvus-data:/var/lib/milvus/data
     environment:
+      # Tell Milvus where to find its dependencies within the Docker network.
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
     depends_on:
+      # Control startup order. Milvus will not start until etcd is started and MinIO is healthy.
       etcd:
         condition: service_started
       minio:
         condition: service_healthy
     healthcheck:
+      # Check if the Milvus service itself is healthy and ready to accept connections.
       test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
       interval: 30s
       timeout: 10s
       retries: 5
 
+  # --- Redpanda (Kafka-compatible Broker) ---
+  # A high-performance message broker for our real-time interaction events.
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:latest
     container_name: redpanda-1
     networks:
       - nebula-network
     ports:
-      - "9092:9092"
-      - "19092:19092"
-      - "9644:9644"
+      - "9092:9092" # External Kafka API port (for our local Python scripts)
+      - "19092:19092" # Internal Kafka API port (for other containers like the console)
+      - "9644:9644" # Redpanda Admin API port
     volumes:
       - redpanda-data:/var/lib/redpanda/data
     command:
       - redpanda
       - start
-      - --mode dev-container
+      - --mode dev-container # A special mode for development that simplifies setup.
+      # Define two listeners: one for internal traffic and one for external.
       - --kafka-addr internal://0.0.0.0:19092,external://0.0.0.0:9092
+      # Advertise the correct hostnames for each listener. `redpanda` for internal, `localhost` for external.
       - --advertise-kafka-addr internal://redpanda:19092,external://localhost:9092
+
+  # A web-based UI for managing and viewing Redpanda topics and messages.
   redpanda-console:
     image: docker.redpanda.com/redpandadata/console:latest
     container_name: redpanda-console-1
     networks:
       - nebula-network
     ports:
-      - "8080:8080" # The console UI runs on port 8080
+      - "8080:8080" # Expose the console's web UI on port 8080.
     environment:
-      # Tell the console how to connect to the Redpanda broker internally
+      # Tell the console how to connect to the Redpanda broker using its internal network address.
       KAFKA_BROKERS: "redpanda:19092"
     depends_on:
-      - redpanda
+      - redpanda # Ensure Redpanda starts before the console.
 
+  # --- Redis Cache ---
+  # An in-memory cache for storing the final, pre-computed recommendation lists.
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine # Using the lightweight 'alpine' version.
     container_name: redis-1
     networks:
       - nebula-network
     ports:
-      - "6379:6379"
+      - "6379:6379" # Expose the standard Redis port.
     volumes:
-      - redis-data:/data
-    command: redis-server --save 60 1 --loglevel warning
+      - redis-data:/data # Persist Redis data.
+    command: redis-server --save 60 1 --loglevel warning # Basic Redis configuration.
 
+# --- Global Configurations ---
+# Defines the shared network that allows all services to communicate using their container names as hostnames.
 networks:
   nebula-network:
     driver: bridge
 
+# Defines all the named volumes used for data persistence. This makes it easy to manage them.
 volumes:
   milvus-etcd:
   milvus-data:

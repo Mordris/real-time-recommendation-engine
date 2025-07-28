@@ -1,16 +1,23 @@
-bytewax==0.18.0
-confluent-kafka==2.4.0
-fastapi==0.111.0
-fastavro==1.9.4
-kafka-python==2.0.2
-marshmallow<4.0.0
-numpy==1.26.4
-pandas==2.2.2
-pymilvus==2.4.4
-redis==5.0.7
-requests==2.32.3
-sentence-transformers==3.0.1
-streamlit==1.37.0
-torch==2.3.1
-tqdm==4.66.4
-uvicorn[standard]==0.30.1
+# --- Core Application Frameworks ---
+bytewax==0.18.0              # The Python-native stream processing framework for our real-time engine.
+fastapi==0.111.0             # A modern, high-performance web framework for building our API.
+streamlit==1.37.0            # The framework used to create the interactive web UI/dashboard.
+uvicorn[standard]==0.30.1    # The ASGI web server that runs our FastAPI application.
+
+# --- Data Stores & Connectors ---
+pymilvus==2.4.4              # The official Python SDK for interacting with the Milvus vector database.
+redis==5.0.7                 # The official Python client for our Redis cache.
+kafka-python==2.0.2          # A pure Python Kafka client, used by our FastAPI producer to send messages.
+confluent-kafka==2.4.0       # The high-performance C-based Kafka client, required by Bytewax's KafkaSource.
+fastavro==1.9.4              # A dependency of the confluent-kafka library for handling Avro schemas.
+
+# --- Machine Learning & Data Processing ---
+sentence-transformers==3.0.1 # The Hugging Face library for easily generating high-quality text embeddings.
+torch==2.3.1                 # The deep learning framework required by sentence-transformers to run the models.
+numpy==1.26.4                # The fundamental package for numerical computing in Python, used for vector arithmetic.
+pandas==2.2.2                # A powerful data analysis and manipulation library, used for handling the dataset.
+
+# --- Utilities & Helpers ---
+requests==2.32.3             # The standard library for making HTTP requests, used by the Streamlit UI to call the API.
+tqdm==4.66.4                 # A simple and powerful library for creating smart progress bars in command-line scripts.
+marshmallow<4.0.0            # A data serialization/deserialization library required as a dependency by pymilvus.
