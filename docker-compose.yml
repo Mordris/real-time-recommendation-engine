@@ -78,13 +78,24 @@ services:
       - "9644:9644"
     volumes:
       - redpanda-data:/var/lib/redpanda/data
-    # *** THIS COMMAND SECTION IS THE FIX ***
     command:
       - redpanda
       - start
       - --mode dev-container
       - --kafka-addr internal://0.0.0.0:19092,external://0.0.0.0:9092
       - --advertise-kafka-addr internal://redpanda:19092,external://localhost:9092
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:latest
+    container_name: redpanda-console-1
+    networks:
+      - nebula-network
+    ports:
+      - "8080:8080" # The console UI runs on port 8080
+    environment:
+      # Tell the console how to connect to the Redpanda broker internally
+      KAFKA_BROKERS: "redpanda:19092"
+    depends_on:
+      - redpanda
 
   redis:
     image: redis:7-alpine
