@@ -10,6 +10,11 @@ MILVUS_COLLECTION_NAME = "nebula_items"
 KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
 USER_INTERACTIONS_TOPIC = "user_interactions"
 
+# --- Redis Configuration ---
+REDIS_HOST = "localhost"
+REDIS_PORT = 6379
+RECOMMENDATION_KEY_PREFIX = "user_recommendations:"
+
 # --- Embedding Model Configuration ---
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 EMBEDDING_DIM = 384

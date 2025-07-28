@@ -4,6 +4,7 @@
 import json
 import sys
 import numpy as np
+import redis
 
 from bytewax.dataflow import Dataflow
 from bytewax import operators as op
@@ -12,60 +13,77 @@ from bytewax.connectors.stdio import StdOutSink
 
 from pymilvus import Collection, connections
 
-# Add the project root to the Python path to allow importing 'config'
 sys.path.append('..')
 import config
 
-# --- Milvus Connection Helper ---
-class MilvusConnection:
+# --- External Service Connection Helper ---
+class ExternalConnections:
     def __init__(self):
-        print("--- MilvusConnection: Initializing new connection ---")
+        print("--- Initializing new external service connections ---")
+        # Milvus Connection
         connections.connect("default", host=config.MILVUS_HOST, port=config.MILVUS_PORT)
-        self.collection = Collection(config.MILVUS_COLLECTION_NAME)
+        self.milvus_collection = Collection(config.MILVUS_COLLECTION_NAME)
+        
+        # Redis Connection
+        self.redis_client = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True)
         
     def get_item_vector(self, item_id: str):
-        res = self.collection.query(
-            expr=f"item_id == '{item_id}'",
-            output_fields=["item_embedding"]
+        res = self.milvus_collection.query(expr=f"item_id == '{item_id}'", output_fields=["item_embedding"])
+        return np.array(res[0]["item_embedding"]) if res else None
+
+    def get_recommendations(self, vector, limit=10):
+        search_params = {"metric_type": "L2", "params": {"ef": 128}}
+        results = self.milvus_collection.search(
+            data=[vector.tolist()],
+            anns_field="item_embedding",
+            param=search_params,
+            limit=limit,
+            output_fields=["item_id"]
         )
-        if not res:
-            return None
-        return np.array(res[0]["item_embedding"])
+        return [hit.entity.get('item_id') for hit in results[0]]
+
+    def write_recommendations_to_redis(self, user_id, recommendations):
+        redis_key = f"{config.RECOMMENDATION_KEY_PREFIX}{user_id}"
+        # Store as a JSON string
+        self.redis_client.set(redis_key, json.dumps(recommendations))
 
 # --- Bytewax Stateful Logic ---
-milvus_con = MilvusConnection()
+connections_helper = ExternalConnections()
 
-def update_user_vector(user_vector, interaction):
+def update_and_recommend(user_vector, interaction):
     item_id = interaction['item_id']
-    item_vector = milvus_con.get_item_vector(item_id)
+    item_vector = connections_helper.get_item_vector(item_id)
 
     if item_vector is None:
-        print(f"Warning: Item ID '{item_id}' not found in Milvus. Skipping update.")
-        return user_vector, f"Item {item_id} not found"
+        return user_vector, {"user_id": interaction["user_id"], "recommendations": [], "error": f"Item {item_id} not found"}
 
-    if user_vector is None:
-        new_user_vector = item_vector
-    else:
-        new_user_vector = (user_vector * 0.9) + (item_vector * 0.1)
+    new_user_vector = item_vector if user_vector is None else (user_vector * 0.9) + (item_vector * 0.1)
     
+    # After updating the vector, immediately generate new recommendations
+    recommendations = connections_helper.get_recommendations(new_user_vector)
+    # Exclude the item the user just interacted with from the recommendations
+    if item_id in recommendations:
+        recommendations.remove(item_id)
+
     return new_user_vector, {
         "user_id": interaction["user_id"],
-        "updated_vector": new_user_vector.tolist()
+        "recommendations": recommendations
     }
+
+def write_to_redis(user_id__recs_dict):
+    user_id, recs_dict = user_id__recs_dict
+    if "error" not in recs_dict:
+        connections_helper.write_recommendations_to_redis(user_id, recs_dict["recommendations"])
+    return user_id__recs_dict # Pass through for logging
 
 # --- Bytewax Dataflow Definition ---
 flow = Dataflow("recommendation_processor")
 
-kafka_stream = op.input(
-    "kafka_in", 
-    flow, 
-    KafkaSource(
-        brokers=[config.KAFKA_BOOTSTRAP_SERVERS],
-        topics=[config.USER_INTERACTIONS_TOPIC],
-        # *** THE FIX IS HERE: `tail=True` makes the process long-running. ***
-        tail=True 
-    )
-)
+kafka_stream = op.input("kafka_in", flow, KafkaSource(
+    brokers=[config.KAFKA_BOOTSTRAP_SERVERS],
+    topics=[config.USER_INTERACTIONS_TOPIC],
+    tail=True 
+))
 
 def decode_message(msg: KafkaSourceMessage):
     return (msg.key.decode('utf-8'), json.loads(msg.value.decode('utf-8')))
@@ -73,17 +91,21 @@ def decode_message(msg: KafkaSourceMessage):
 keyed_stream = op.map("decode", kafka_stream, decode_message)
 
 stateful_stream = op.stateful_map(
-    "update_taste_vector",
+    "update_and_recommend",
     keyed_stream,
     builder=lambda: None,
-    mapper=update_user_vector
+    mapper=update_and_recommend
 )
 
-def format_output(user_id__update_info):
-    user_id, update_info = user_id__update_info
-    vector_preview = update_info['updated_vector'][:4]
-    return f"✅ User: {user_id}, Updated Vector (preview): {vector_preview}..."
+# This map step is a "side effect" that writes the results to Redis
+redis_stream = op.map("write_to_redis", stateful_stream, write_to_redis)
 
-formatted_stream = op.map("format", stateful_stream, format_output)
+def format_output(user_id__recs_dict):
+    user_id, recs_dict = user_id__recs_dict
+    if "error" in recs_dict:
+        return f"⚠️  User: {user_id}, Error: {recs_dict['error']}"
+    return f"✅ User: {user_id}, Wrote {len(recs_dict['recommendations'])} recs to Redis."
+
+formatted_stream = op.map("format_output", redis_stream, format_output)
 
 op.output("stdout", formatted_stream, StdOutSink())

@@ -7,6 +7,7 @@ marshmallow<4.0.0
 numpy==1.26.4
 pandas==2.2.2
 pymilvus==2.4.4
+redis==5.0.7
 requests==2.32.3
 sentence-transformers==3.0.1
 streamlit==1.37.0
