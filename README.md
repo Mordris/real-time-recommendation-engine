@@ -14,7 +14,7 @@ The system is designed with a modern, scalable architecture representative of wh
 
 ## 🚀 Live Demo
 
-![Nebula Demo GIF](https://github.com/Mordris/real-time-recommendation-engine/docs/gifs/live-demo.gif)
+![Nebula Demo GIF](docs/gifs/live-demo.gif)
 
 The demo above shows the full end-to-end system in action:
 
