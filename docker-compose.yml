@@ -45,7 +45,6 @@ services:
   milvus-standalone:
     image: milvusdb/milvus:v2.4.4
     container_name: milvus-standalone-1
-    # THIS COMMAND IS THE FIX. It tells the container to start the Milvus process.
     command: ["milvus", "run", "standalone"]
     networks:
       - nebula-network
@@ -79,12 +78,13 @@ services:
       - "9644:9644"
     volumes:
       - redpanda-data:/var/lib/redpanda/data
+    # *** THIS COMMAND SECTION IS THE FIX ***
     command:
       - redpanda
       - start
       - --mode dev-container
-      - --kafka-addr PLAINTEXT://0.0.0.0:19092,PLAINTEXT://0.0.0.0:9092
-      - --advertise-kafka-addr PLAINTEXT://redpanda:19092,PLAINTEXT://localhost:9092
+      - --kafka-addr internal://0.0.0.0:19092,external://0.0.0.0:9092
+      - --advertise-kafka-addr internal://redpanda:19092,external://localhost:9092
 
   redis:
     image: redis:7-alpine
