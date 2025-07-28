@@ -58,8 +58,7 @@ The system is composed of two pipelines: an **Offline Pipeline** for initial dat
     - A `GET /recommendations/{user_id}` request is sent to the **FastAPI** server.
     - The API fetches the latest list of recommendations for the user directly from the **Redis** cache for an extremely fast response.
 
-<details>
-<summary><strong>📷 System Screenshots</strong></summary>
+### 📷 System Screenshots
 
 #### Redpanda Console Web UI
 
@@ -83,8 +82,6 @@ The final user interface, demonstrating both the real-time recommendation update
 
 ![Streamlit UI - Real-time](docs/screenshots/streamlit_ui_1.png)
 ![Streamlit UI - Static](docs/screenshots/streamlit_ui_2.png)
-
-</details>
 
 ## ⚙️ Technology Stack
 
