@@ -4,6 +4,7 @@ fastapi==0.111.0
 fastavro==1.9.4
 kafka-python==2.0.2
 marshmallow<4.0.0
+numpy==1.26.4
 pandas==2.2.2
 pymilvus==2.4.4
 requests==2.32.3
