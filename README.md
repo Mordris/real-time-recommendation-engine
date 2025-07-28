@@ -63,25 +63,26 @@ The system is composed of two pipelines: an **Offline Pipeline** for initial dat
 #### Redpanda Console Web UI
 
 The console shows the `user_interactions` topic successfully receiving events from the API.
-
-![Redpanda Console](docs/screenshots/redpanda_console.png)
+<br/>
+<img src="docs/screenshots/redpanda_console.png" alt="Redpanda Console" width="800"/>
 
 ---
 
 #### FastAPI Interactive Documentation
 
 The auto-generated Swagger UI for the API, showing all available endpoints for ingestion and serving.
-
-![FastAPI Docs](docs/screenshots/fastapi_docs.png)
+<br/>
+<img src="docs/screenshots/fastapi_docs.png" alt="FastAPI Docs" width="800"/>
 
 ---
 
 #### Streamlit Interactive Dashboard
 
 The final user interface, demonstrating both the real-time recommendation updates and the static, content-based similarity search.
-
-![Streamlit UI - Real-time](docs/screenshots/streamlit_ui_1.png)
-![Streamlit UI - Static](docs/screenshots/streamlit_ui_2.png)
+<br/>
+<img src="docs/screenshots/streamlit_ui_1.png" alt="Streamlit UI - Real-time" width="800"/>
+<br/>
+<img src="docs/screenshots/streamlit_ui_2.png" alt="Streamlit UI - Static" width="800"/>
 
 ## ⚙️ Technology Stack
 
