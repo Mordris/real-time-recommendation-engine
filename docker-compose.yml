@@ -1,0 +1,109 @@
+# Full configuration for all of Nebula's backend services.
+# To run: docker compose up -d
+# To stop: docker compose down
+
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.14
+    container_name: milvus-etcd-1
+    networks:
+      - nebula-network
+    volumes:
+      - milvus-etcd:/etcd-data
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd1
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://0.0.0.0:2379
+      - --initial-advertise-peer-urls=http://etcd:2380
+      - --initial-cluster=etcd1=http://etcd:2380
+      - --initial-cluster-state=new
+
+  minio:
+    image: minio/minio:latest
+    container_name: milvus-minio-1
+    networks:
+      - nebula-network
+    volumes:
+      - milvus-minio:/data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  milvus-standalone:
+    image: milvusdb/milvus:v2.4.4
+    container_name: milvus-standalone-1
+    # THIS COMMAND IS THE FIX. It tells the container to start the Milvus process.
+    command: ["milvus", "run", "standalone"]
+    networks:
+      - nebula-network
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    volumes:
+      - milvus-data:/var/lib/milvus/data
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    depends_on:
+      etcd:
+        condition: service_started
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: redpanda-1
+    networks:
+      - nebula-network
+    ports:
+      - "9092:9092"
+      - "19092:19092"
+      - "9644:9644"
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    command:
+      - redpanda
+      - start
+      - --mode dev-container
+      - --kafka-addr PLAINTEXT://0.0.0.0:19092,PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://redpanda:19092,PLAINTEXT://localhost:9092
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis-1
+    networks:
+      - nebula-network
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --save 60 1 --loglevel warning
+
+networks:
+  nebula-network:
+    driver: bridge
+
+volumes:
+  milvus-etcd:
+  milvus-data:
+  milvus-minio:
+  redpanda-data:
+  redis-data:
