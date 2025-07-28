@@ -36,27 +36,9 @@ The demo above shows the full end-to-end system in action:
 
 ## 🏗️ System Architecture
 
-The system is composed of two pipelines: an **Offline Pipeline** for initial data preparation and an **Online (Streaming) Pipeline** for real-time processing and serving.
+The system is composed of three distinct pipelines: an **Offline Pipeline** for initial data preparation, an **Online (Streaming) Pipeline** for live processing, and a **Serving Layer** for user-facing requests.
 
-**Data Flow:**
-
-1.  **Offline (Batch Processing):**
-
-    - A Python script (`batch_embedder.py`) reads the Stanford SNAP Electronics dataset.
-    - It uses a Sentence Transformer model to convert product titles and descriptions into 384-dimensional vector embeddings.
-    - These embeddings are loaded in bulk into the **Milvus** vector database.
-
-2.  **Online (Real-Time Streaming):**
-
-    - **(A) Event Ingestion:** A `POST /interaction` request is sent to the **FastAPI** server.
-    - **(B) Message Brokering:** The API produces the event to a `user_interactions` topic in **Redpanda**.
-    - **(C) Stateful Processing:** The **Bytewax** dataflow consumes the event. It maintains a state (the `user_taste_vector`) for each `user_id`. It fetches the corresponding item vector from Milvus and updates the user's vector using a moving average.
-    - **(D) Candidate Generation:** Immediately after the update, the Bytewax dataflow uses the new `user_taste_vector` to query **Milvus** for the top 'k' most similar items.
-    - **(E) Caching:** The final list of recommended item IDs is written to a **Redis** cache.
-
-3.  **Serving:**
-    - A `GET /recommendations/{user_id}` request is sent to the **FastAPI** server.
-    - The API fetches the latest list of recommendations for the user directly from the **Redis** cache for an extremely fast response.
+![Nebula System Diagram](docs/diagrams/nebula_system_diagram.png)
 
 ### 📷 System Screenshots
 
@@ -181,6 +163,8 @@ A browser tab should open automatically to `http://localhost:8501`. You can now 
 ├── data/
 │   └── meta_Electronics.json.gz # The dataset file (must be downloaded)
 ├── docs/
+│   ├── diagrams/
+│   │   └── nebula_system_diagram.png # The main architecture diagram
 │   └── screenshots/         # Screenshots for the README
 ├── realtime_processor/
 │   └── processor.py         # The Bytewax dataflow script
